@@ -1,9 +1,9 @@
 import { GraphQLInputObjectType, GraphQLNonNull, GraphQLString } from 'graphql';
 import { UUIDType } from '../../types/uuid.js';
-import { PostType } from './queries.js';
+import { postType } from './queries.js';
 import { PrismaClient } from '@prisma/client';
 
-export const CreatePostInputType = new GraphQLInputObjectType({
+export const createPostInputType = new GraphQLInputObjectType({
   name: 'CreatePostInput',
   fields: () => ({
     title: { type: new GraphQLNonNull(GraphQLString) },
@@ -12,10 +12,10 @@ export const CreatePostInputType = new GraphQLInputObjectType({
   }),
 });
 
-export const PostMutations = {
+export const postMutations = {
   createPost: {
-    type: PostType,
-    args: { dto: { type: CreatePostInputType } },
+    type: postType,
+    args: { dto: { type: createPostInputType } },
     resolve: async (
       _parent: unknown,
       args: { dto: {

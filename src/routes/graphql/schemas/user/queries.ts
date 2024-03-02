@@ -1,17 +1,17 @@
 import { GraphQLObjectType, GraphQLString, GraphQLFloat, GraphQLList } from 'graphql';
 import { UUIDType } from '../../types/uuid.js';
-import { ProfileType } from '../profile/queries.js';
-import { PostType } from '../post/queries.js';
+import { profileType } from '../profile/queries.js';
+import { postType } from '../post/queries.js';
 import { PrismaClient } from '@prisma/client';
 
-export const UserType: GraphQLObjectType<{ id: string }, {prismaClient: PrismaClient}> = new GraphQLObjectType({
+export const userType: GraphQLObjectType<{ id: string }, {prismaClient: PrismaClient}> = new GraphQLObjectType({
   name: 'User',
   fields: () => ({
     id: { type: UUIDType },
     name: { type: GraphQLString },
     balance: { type: GraphQLFloat },
     profile: {
-      type: ProfileType,
+      type: profileType,
       resolve: async (parent, _args: unknown, context) => {
         const userProfile = await context.prismaClient.profile.findUnique({
           where: { userId: parent.id },
@@ -20,7 +20,7 @@ export const UserType: GraphQLObjectType<{ id: string }, {prismaClient: PrismaCl
       },
     },
     posts: {
-      type: new GraphQLList(PostType),
+      type: new GraphQLList(postType),
       resolve: async (parent, _args: unknown, context) => {
         const userPosts = await context.prismaClient.post.findMany({
           where: { authorId: parent.id },
@@ -29,7 +29,7 @@ export const UserType: GraphQLObjectType<{ id: string }, {prismaClient: PrismaCl
       },
     },
     userSubscribedTo: {
-      type: new GraphQLList(UserType),
+      type: new GraphQLList(userType),
       resolve: async (parent, _args: unknown, context) => {
         const authors = await context.prismaClient.subscribersOnAuthors.findMany({
           where: { subscriberId: parent.id },
@@ -39,7 +39,7 @@ export const UserType: GraphQLObjectType<{ id: string }, {prismaClient: PrismaCl
       },
     },
     subscribedToUser: {
-      type: new GraphQLList(UserType),
+      type: new GraphQLList(userType),
       resolve: async (parent, _args: unknown, context) => {
         const subscribers = await context.prismaClient.subscribersOnAuthors.findMany({
           where: { authorId: parent.id },
@@ -51,16 +51,16 @@ export const UserType: GraphQLObjectType<{ id: string }, {prismaClient: PrismaCl
   }),
 });
 
-export const UserQueries = {
+export const userQueries = {
   users: {
-    type: new GraphQLList(UserType),
+    type: new GraphQLList(userType),
     resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient}) => {
       const users = await context.prismaClient.user.findMany();
       return users;
     },
   },
   user: {
-    type: UserType,
+    type: userType,
     args: { id: { type: UUIDType } },
     resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient}) => {
       const user = await context.prismaClient.user.findUnique({ where: { id: args.id } });

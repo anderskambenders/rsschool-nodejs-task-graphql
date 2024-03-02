@@ -1,10 +1,10 @@
 import { GraphQLList } from 'graphql';
 import { GraphQLObjectType, GraphQLString } from 'graphql';
 import { UUIDType } from '../../types/uuid.js';
-import { UserType } from '../user/queries.js';
+import { userType } from '../user/queries.js';
 import { PrismaClient } from '@prisma/client';
 
-export const PostType: GraphQLObjectType<{ authorId: string }, {prismaClient: PrismaClient}> = new GraphQLObjectType({
+export const postType: GraphQLObjectType<{ authorId: string }, {prismaClient: PrismaClient}> = new GraphQLObjectType({
   name: 'Post',
   fields: () => ({
     id: { type: UUIDType },
@@ -12,7 +12,7 @@ export const PostType: GraphQLObjectType<{ authorId: string }, {prismaClient: Pr
     content: { type: GraphQLString },
     authorId: { type: UUIDType },
     author: {
-      type: UserType,
+      type: userType,
       resolve: async (
         parent: { authorId: string },
         _args: unknown,
@@ -27,16 +27,16 @@ export const PostType: GraphQLObjectType<{ authorId: string }, {prismaClient: Pr
   }),
 });
 
-export const PostQueries = {
+export const postQueries = {
   posts: {
-    type: new GraphQLList(PostType),
+    type: new GraphQLList(postType),
     resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient}) => {
       const posts = await context.prismaClient.post.findMany();
       return posts;
     },
   },
   post: {
-    type: PostType,
+    type: postType,
     args: { id: { type: UUIDType } },
     resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient}) => {
       const post = await context.prismaClient.post.findUnique({ where: { id: args.id } });

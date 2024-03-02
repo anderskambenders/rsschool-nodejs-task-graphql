@@ -1,19 +1,19 @@
 import { GraphQLObjectType, GraphQLSchema } from 'graphql';
-import { UserQueries }  from './user/queries.js';
-import { ProfileQueries }  from './profile/queries.js';
-import { PostQueries }  from './post/queries.js';
-import { MemberTypeQueries }  from './memberType/queries.js';
-import { PostMutations } from './post/mutation.js';
+import { userQueries }  from './user/queries.js';
+import { profileQueries }  from './profile/queries.js';
+import { postQueries }  from './post/queries.js';
+import { memberTypeQueries }  from './memberType/queries.js';
+import { postMutations } from './post/mutation.js';
 
 const queryFields = () => ({
-  ...UserQueries,
-  ...ProfileQueries,
-  ...PostQueries,
-  ...MemberTypeQueries,
+  ...userQueries,
+  ...profileQueries,
+  ...postQueries,
+  ...memberTypeQueries,
 })
 
 const mutationFields = () => ({
-  ...PostMutations
+  ...postMutations
 })
 
 const schema = new GraphQLSchema({
