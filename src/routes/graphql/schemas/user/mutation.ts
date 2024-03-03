@@ -71,4 +71,48 @@ export const userMutations = {
       return user;
     },
   },
+  subscribeTo: {
+    type: userType,
+    args: { userId: { type: UUIDType }, authorId: { type: UUIDType } },
+    resolve: async (
+      _parent: unknown,
+      args: { userId: string; authorId: string },
+      context: {
+        prismaClient: PrismaClient;
+      },
+    ) => {
+      await context.prismaClient.subscribersOnAuthors.create({
+        data: {
+          subscriberId: args.userId,
+          authorId: args.authorId,
+        },
+      });
+      const user = context.prismaClient.user.findUnique({ where: { id: args.userId } });
+      return user;
+    },
+  },
+
+  unsubscribeFrom: {
+    type: GraphQLBoolean,
+    args: { userId: { type: UUIDType }, authorId: { type: UUIDType } },
+    resolve: async (
+      _parent: unknown,
+      args: { userId: string; authorId: string },
+      context: {
+        prismaClient: PrismaClient;
+      },
+    ) => {
+      try {
+        await context.prismaClient.subscribersOnAuthors.deleteMany({
+          where: {
+            subscriberId: args.userId,
+            authorId: args.authorId,
+          },
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  },
 };
