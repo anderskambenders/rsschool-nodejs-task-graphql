@@ -4,7 +4,14 @@ import { UUIDType } from '../../types/uuid.js';
 import { userType } from '../user/queries.js';
 import { PrismaClient } from '@prisma/client';
 
-export const postType: GraphQLObjectType<{ authorId: string }, {prismaClient: PrismaClient}> = new GraphQLObjectType({
+export type PostSchema = {
+  id: string;
+  title: string;
+  content: string;
+  authorId: string;
+};
+
+export const postType: GraphQLObjectType<PostSchema, {prismaClient: PrismaClient}> = new GraphQLObjectType({
   name: 'Post',
   fields: () => ({
     id: { type: UUIDType },

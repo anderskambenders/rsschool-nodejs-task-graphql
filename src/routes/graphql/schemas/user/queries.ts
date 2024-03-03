@@ -1,10 +1,27 @@
-import { GraphQLObjectType, GraphQLString, GraphQLFloat, GraphQLList } from 'graphql';
+import { GraphQLObjectType, GraphQLString, GraphQLFloat, GraphQLList, GraphQLResolveInfo, Kind } from 'graphql';
 import { UUIDType } from '../../types/uuid.js';
-import { profileType } from '../profile/queries.js';
-import { postType } from '../post/queries.js';
+import { ProfileSchema, profileType } from '../profile/queries.js';
+import { PostSchema, postType } from '../post/queries.js';
 import { PrismaClient } from '@prisma/client';
+import AppDataLoader from '../../dataLoader.js';
 
-export const userType: GraphQLObjectType<{ id: string }, {prismaClient: PrismaClient}> = new GraphQLObjectType({
+export type UserSchema = {
+  id: string;
+  name: string;
+  balance: number;
+  profile?: ProfileSchema;
+  posts?: PostSchema[];
+  userSubscribedTo?: Array<{
+    subscriberId: string;
+    authorId: string;
+  }>;
+  subscribedToUser?: Array<{
+    subscriberId: string;
+    authorId: string;
+  }>;
+};
+
+export const userType: GraphQLObjectType<UserSchema, {prismaClient: PrismaClient, dataLoader: AppDataLoader}> = new GraphQLObjectType({
   name: 'User',
   fields: () => ({
     id: { type: UUIDType },
@@ -13,39 +30,33 @@ export const userType: GraphQLObjectType<{ id: string }, {prismaClient: PrismaCl
     profile: {
       type: profileType,
       resolve: async (parent, _args: unknown, context) => {
-        const userProfile = await context.prismaClient.profile.findUnique({
-          where: { userId: parent.id },
-        });
+        const userProfile = await context.dataLoader.userProfile.load(parent.id);
         return userProfile;
       },
     },
     posts: {
       type: new GraphQLList(postType),
       resolve: async (parent, _args: unknown, context) => {
-        const userPosts = await context.prismaClient.post.findMany({
-          where: { authorId: parent.id },
-        });
+        const userPosts = await context.dataLoader.userPosts.load(parent.id);
         return userPosts;
       },
     },
     userSubscribedTo: {
       type: new GraphQLList(userType),
       resolve: async (parent, _args: unknown, context) => {
-        const authors = await context.prismaClient.subscribersOnAuthors.findMany({
-          where: { subscriberId: parent.id },
-          select: { author: true },
-        });
-        return authors.map(({ author }) => author);
+        const parentValue = parent['userSubscribedTo'];
+        return parentValue
+          ? context.dataLoader.user.loadMany(parentValue.map(s => s.subscriberId))
+          : context.dataLoader.subscribed.load(parent.id);
       },
     },
     subscribedToUser: {
       type: new GraphQLList(userType),
       resolve: async (parent, _args: unknown, context) => {
-        const subscribers = await context.prismaClient.subscribersOnAuthors.findMany({
-          where: { authorId: parent.id },
-          select: { subscriber: true },
-        });
-        return subscribers.map(({ subscriber }) => subscriber);
+        const parentValue = parent['subscribedToUser'];
+        return parentValue
+          ? context.dataLoader.user.loadMany(parentValue.map(s => s.authorId))
+          : context.dataLoader.subscribers.load(parent.id);
       },
     },
   }),
@@ -54,17 +65,34 @@ export const userType: GraphQLObjectType<{ id: string }, {prismaClient: PrismaCl
 export const userQueries = {
   users: {
     type: new GraphQLList(userType),
-    resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient}) => {
-      const users = await context.prismaClient.user.findMany();
+    resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient, dataLoader: AppDataLoader}, resolveInfo: GraphQLResolveInfo) => {
+      const include = {};
+      resolveInfo.fieldNodes.forEach((field) => {
+        field.selectionSet?.selections.forEach((selection) => {
+          if (
+            selection.kind == Kind.FIELD &&
+            ['userSubscribedTo', 'subscribedToUser'].includes(selection.name.value)
+          ) {
+            include[selection.name.value] = true;
+          }
+        });
+      });
+      const users = context.prismaClient.user.findMany({ include });
+      users
+        .then((users) => {
+          users.map((u) => {
+            context.dataLoader.user.prime(u.id, u);
+          });
+        })
+        .catch(() => {});
       return users;
     },
   },
   user: {
     type: userType,
     args: { id: { type: UUIDType } },
-    resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient}) => {
-      const user = await context.prismaClient.user.findUnique({ where: { id: args.id } });
-      return user;
+    resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient, dataLoader: AppDataLoader}) => {
+      return context.dataLoader.user.load(args.id);
     },
   },
 };
