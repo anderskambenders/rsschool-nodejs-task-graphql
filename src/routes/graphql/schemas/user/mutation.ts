@@ -3,26 +3,16 @@ import { userType } from './queries.js';
 import { PrismaClient } from '@prisma/client';
 import { UUIDType } from '../../types/uuid.js';
 
-export const createUserInputType = new GraphQLInputObjectType({
-  name: 'CreateUserInput',
-  fields: () => ({
-    name: { type: new GraphQLNonNull(GraphQLString) },
-    balance: { type: new GraphQLNonNull(GraphQLFloat) },
-  }),
-});
-
-export const changeUserInputType = new GraphQLInputObjectType({
-  name: 'ChangeUserInput',
-  fields: () => ({
-    name: { type: GraphQLString },
-    balance: { type: GraphQLFloat },
-  }),
-});
-
 export const userMutations = {
   createUser: {
     type: userType,
-    args: { dto: { type: createUserInputType } },
+    args: { dto: { type: new GraphQLInputObjectType({
+      name: 'CreateUserInput',
+      fields: () => ({
+        name: { type: new GraphQLNonNull(GraphQLString) },
+        balance: { type: new GraphQLNonNull(GraphQLFloat) },
+      }),
+    })}},
     resolve: async (
       _parent: unknown,
       args: { dto: {
@@ -33,8 +23,7 @@ export const userMutations = {
         prismaClient: PrismaClient;
       },
     ) => {
-      const user = await context.prismaClient.user.create({ data: args.dto });
-      return user;
+      return await context.prismaClient.user.create({ data: args.dto });
     },
   },
   deleteUser: {
@@ -46,14 +35,20 @@ export const userMutations = {
       try {
         await context.prismaClient.user.delete({ where: { id: args.id } });
         return true;
-      } catch (err) {
+      } catch (error) {
         return false;
       }
     },
   },
   changeUser: {
     type: userType,
-    args: { id: { type: UUIDType }, dto: { type: changeUserInputType } },
+    args: { id: { type: UUIDType }, dto: { type: new GraphQLInputObjectType({
+      name: 'ChangeUserInput',
+      fields: () => ({
+        name: { type: GraphQLString },
+        balance: { type: GraphQLFloat },
+      }),
+    }) } },
     resolve: async (
       _parent: unknown,
       args: { id: string; dto: {
@@ -64,11 +59,10 @@ export const userMutations = {
         prismaClient: PrismaClient;
       },
     ) => {
-      const user = await context.prismaClient.user.update({
+      return await context.prismaClient.user.update({
         where: { id: args.id },
         data: args.dto,
       });
-      return user;
     },
   },
   subscribeTo: {
@@ -87,11 +81,9 @@ export const userMutations = {
           authorId: args.authorId,
         },
       });
-      const user = context.prismaClient.user.findUnique({ where: { id: args.userId } });
-      return user;
+      return context.prismaClient.user.findUnique({ where: { id: args.userId } });
     },
   },
-
   unsubscribeFrom: {
     type: GraphQLBoolean,
     args: { userId: { type: UUIDType }, authorId: { type: UUIDType } },
