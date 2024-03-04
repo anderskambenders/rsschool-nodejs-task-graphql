@@ -3,28 +3,17 @@ import { UUIDType } from '../../types/uuid.js';
 import { postType } from './queries.js';
 import { PrismaClient } from '@prisma/client';
 
-export const createPostInputType = new GraphQLInputObjectType({
-  name: 'CreatePostInput',
-  fields: () => ({
-    title: { type: new GraphQLNonNull(GraphQLString) },
-    content: { type: new GraphQLNonNull(GraphQLString) },
-    authorId: { type: new GraphQLNonNull(UUIDType) },
-  }),
-});
-
-export const changePostInputType = new GraphQLInputObjectType({
-  name: 'ChangePostInput',
-  fields: () => ({
-    title: { type: GraphQLString },
-    content: { type: GraphQLString },
-    authorId: { type: UUIDType },
-  }),
-});
-
 export const postMutations = {
   createPost: {
     type: postType,
-    args: { dto: { type: createPostInputType } },
+    args: { dto: { type: new GraphQLInputObjectType({
+      name: 'CreatePostInput',
+      fields: () => ({
+        title: { type: new GraphQLNonNull(GraphQLString) },
+        content: { type: new GraphQLNonNull(GraphQLString) },
+        authorId: { type: new GraphQLNonNull(UUIDType) },
+      }),
+    }) } },
     resolve: async (
       _parent: unknown,
       args: { dto: {
@@ -56,7 +45,14 @@ export const postMutations = {
   },
   changePost: {
     type: postType,
-    args: { id: { type: UUIDType }, dto: { type: changePostInputType } },
+    args: { id: { type: UUIDType }, dto: { type: new GraphQLInputObjectType({
+      name: 'ChangePostInput',
+      fields: () => ({
+        title: { type: GraphQLString },
+        content: { type: GraphQLString },
+        authorId: { type: UUIDType },
+      }),
+    }) } },
     resolve: async (
       _parent: unknown,
       args: { id: string; dto: {

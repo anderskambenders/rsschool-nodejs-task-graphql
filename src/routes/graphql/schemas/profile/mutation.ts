@@ -4,29 +4,18 @@ import { memberTypeId } from '../memberType/queries.js';
 import { profileType } from './queries.js';
 import { PrismaClient } from '@prisma/client';
 
-export const createProfileInputType = new GraphQLInputObjectType({
-  name: 'CreateProfileInput',
-  fields: () => ({
-    isMale: { type: new GraphQLNonNull(GraphQLBoolean) },
-    yearOfBirth: { type: new GraphQLNonNull(GraphQLInt) },
-    userId: { type: new GraphQLNonNull(UUIDType) },
-    memberTypeId: { type: new GraphQLNonNull(memberTypeId) },
-  }),
-});
-
-export const changeProfileInputType = new GraphQLInputObjectType({
-  name: 'ChangeProfileInput',
-  fields: () => ({
-    isMale: { type: GraphQLBoolean },
-    yearOfBirth: { type: GraphQLInt },
-    memberTypeId: { type: memberTypeId },
-  }),
-});
-
 export const profileMutations = {
   createProfile: {
     type: profileType,
-    args: { dto: { type: createProfileInputType } },
+    args: { dto: { type: new GraphQLInputObjectType({
+      name: 'CreateProfileInput',
+      fields: () => ({
+        isMale: { type: new GraphQLNonNull(GraphQLBoolean) },
+        yearOfBirth: { type: new GraphQLNonNull(GraphQLInt) },
+        userId: { type: new GraphQLNonNull(UUIDType) },
+        memberTypeId: { type: new GraphQLNonNull(memberTypeId) },
+      }),
+    }) } },
     resolve: async (
       _parent: unknown,
       args: { dto: {
@@ -39,8 +28,7 @@ export const profileMutations = {
         prismaClient: PrismaClient;
       },
     ) => {
-      const profile = await context.prismaClient.profile.create({ data: args.dto });
-      return profile;
+      return await context.prismaClient.profile.create({ data: args.dto });
     },
   },
   deleteProfile: {
@@ -59,7 +47,14 @@ export const profileMutations = {
   },
   changeProfile: {
     type: profileType,
-    args: { id: { type: UUIDType }, dto: { type: changeProfileInputType } },
+    args: { id: { type: UUIDType }, dto: { type: new GraphQLInputObjectType({
+      name: 'ChangeProfileInput',
+      fields: () => ({
+        isMale: { type: GraphQLBoolean },
+        yearOfBirth: { type: GraphQLInt },
+        memberTypeId: { type: memberTypeId },
+      }),
+    }) } },
     resolve: async (
       _parent: unknown,
       args: { id: string; dto: {
@@ -72,11 +67,10 @@ export const profileMutations = {
         prismaClient: PrismaClient;
       },
     ) => {
-      const profile = await context.prismaClient.profile.update({
+      return await context.prismaClient.profile.update({
         where: { id: args.id },
         data: args.dto,
       });
-      return profile;
     },
   },
 };
