@@ -3,7 +3,9 @@ import { userQueries }  from './user/queries.js';
 import { profileQueries }  from './profile/queries.js';
 import { postQueries }  from './post/queries.js';
 import { memberTypeQueries }  from './memberType/queries.js';
-import { PostMutations } from './post/mutation.js';
+import { postMutations } from './post/mutation.js';
+import { profileMutations } from './profile/mutation.js';
+import { userMutations } from './user/mutation.js';
 
 const queryFields = () => ({
   ...userQueries,
@@ -13,7 +15,9 @@ const queryFields = () => ({
 })
 
 const mutationFields = () => ({
-  ...PostMutations
+  ...postMutations,
+  ...profileMutations,
+  ...userMutations
 })
 
 const schema = new GraphQLSchema({

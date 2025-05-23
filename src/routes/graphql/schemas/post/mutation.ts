@@ -12,7 +12,7 @@ export const CreatePostInputType = new GraphQLInputObjectType({
   }),
 });
 
-export const PostMutations = {
+export const postMutations = {
   createPost: {
     type: postType,
     args: { dto: { type: CreatePostInputType } },
