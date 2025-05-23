@@ -1,11 +1,11 @@
 import { GraphQLList } from 'graphql';
 import { UUIDType } from '../../types/uuid.js';
 import { GraphQLObjectType, GraphQLBoolean, GraphQLInt } from 'graphql';
-import { MemberTypeId, MemberType } from '../memberType/queries.js';
-import { UserType } from '../user/queries.js';
+import { memberTypeId, memberType } from '../memberType/queries.js';
+import { userType } from '../user/queries.js';
 import { PrismaClient } from '@prisma/client';
 
-export const ProfileType: GraphQLObjectType<{
+export const profileType: GraphQLObjectType<{
   userId: string;
   memberTypeId: string;
 }, {prismaClient: PrismaClient}> =
@@ -16,10 +16,10 @@ export const ProfileType: GraphQLObjectType<{
       isMale: { type: GraphQLBoolean },
       yearOfBirth: { type: GraphQLInt },
       userId: { type: UUIDType },
-      memberTypeId: { type: MemberTypeId },
+      memberTypeId: { type: memberTypeId },
 
       user: {
-        type: UserType,
+        type: userType,
         resolve: async (parent, _args: unknown, context) => {
           const profileUser = await context.prismaClient.user.findUnique({
             where: { id: parent.userId },
@@ -28,7 +28,7 @@ export const ProfileType: GraphQLObjectType<{
         },
       },
       memberType: {
-        type: MemberType,
+        type: memberType,
         resolve: async (parent, _args: unknown, context) => {
           const userMemberType = await context.prismaClient.memberType.findUnique({
             where: { id: parent.memberTypeId },
@@ -39,16 +39,16 @@ export const ProfileType: GraphQLObjectType<{
     }),
   });
 
-export const ProfileQueries = {
+export const profileQueries = {
   profiles: {
-    type: new GraphQLList(ProfileType),
+    type: new GraphQLList(profileType),
     resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient}) => {
       const profiles = await context.prismaClient.profile.findMany();
       return profiles;
     },
   },
   profile: {
-    type: ProfileType,
+    type: profileType,
     args: { id: { type: UUIDType } },
     resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient}) => {
       const profile = await context.prismaClient.profile.findUnique({
