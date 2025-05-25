@@ -1,57 +1,74 @@
+import { PrismaClient } from '@prisma/client';
+import DataLoader from 'dataloader';
 import {
-  GraphQLObjectType,
+  GraphQLEnumType,
   GraphQLFloat,
   GraphQLInt,
-  GraphQLEnumType,
-  GraphQLNonNull,
   GraphQLList,
+  GraphQLNonNull,
+  GraphQLObjectType,
 } from 'graphql';
-import { profileType } from '../profile/queries.js';
-import { PrismaClient } from '@prisma/client';
+import { Static } from '@fastify/type-provider-typebox';
+import { MemberTypeId, memberTypeSchema } from '../../../member-types/schemas.js';
 
-export const memberTypeId = new GraphQLEnumType({
+export type Member = Static<typeof memberTypeSchema>;
+export const MemberTypeIdEnum = new GraphQLEnumType({
   name: 'MemberTypeId',
   values: {
-    basic: { value: 'basic' },
-    business: { value: 'business' },
+    BASIC: { value: MemberTypeId.BASIC },
+    BUSINESS: { value: MemberTypeId.BUSINESS },
   },
 });
 
-export const memberType: GraphQLObjectType<{ id: string }, {prismaClient: PrismaClient}> =
-  new GraphQLObjectType({
-    name: 'MemberType',
-    fields: () => ({
-      id: { type: new GraphQLNonNull(memberTypeId) },
-      discount: { type: GraphQLFloat },
-      postsLimitPerMonth: { type: GraphQLInt },
-      profiles: {
-        type: new GraphQLList(profileType),
-        resolve: async (parent: { id: string }, _args: unknown, context: {prismaClient: PrismaClient}) => {
-          const profiles = await context.prismaClient.profile.findMany({
-            where: { memberTypeId: parent.id },
-          });
-          return profiles;
-        },
-      },
-    }),
-  });
+export const memberTypesIdField = {
+  id: { type: new GraphQLNonNull(MemberTypeIdEnum) },
+};
 
-export const memberTypeQueries = {
-  memberTypes: {
-    type: new GraphQLList(memberType),
-    resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient}) => {
-      const memberTypes = await context.prismaClient.memberType.findMany();
-      return memberTypes;
+const memberTypesFields = {
+  discount: { type: new GraphQLNonNull(GraphQLFloat) },
+  postsLimitPerMonth: { type: new GraphQLNonNull(GraphQLInt) },
+};
+
+export const MemberTypeType = new GraphQLObjectType({
+  name: 'MemberType',
+  fields: () => ({
+    ...memberTypesIdField,
+    ...memberTypesFields,
+  }),
+});
+
+
+export function initMemberTypesLoader(db: PrismaClient) {
+  return new DataLoader(async (ids: readonly string[]) => {
+    const map: Record<string, Member> = {};
+    const rows = await db.memberType.findMany({
+      where: { id: { in: [...ids] } },
+    });
+
+    rows.forEach((it) => {
+      const key = it.id;
+      map[key] = it;
+    });
+
+    return ids.map((id) => map[id] || null);
+  });
+}
+
+
+export const MemberTypesQueries = {
+  memberType: {
+    type: MemberTypeType,
+    args: {
+      ...memberTypesIdField,
+    },
+    resolve: async (parent: unknown, { id }: { id: MemberTypeId }, { db }: Context) => {
+      return await db.memberType.findUnique({ where: { id } });
     },
   },
-  memberType: {
-    type: memberType,
-    args: { id: { type: memberTypeId } },
-    resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient}) => {
-      const memberType = await context.prismaClient.memberType.findUnique({
-        where: { id: args.id },
-      });
-      return memberType;
+  memberTypes: {
+    type: new GraphQLNonNull(new GraphQLList(MemberTypeType)),
+    resolve: async (parent: unknown, args: unknown, { db }: Context) => {
+      return await db.memberType.findMany();
     },
   },
 };
