@@ -27,10 +27,9 @@ export const profileType: GraphQLObjectType<ProfileSchema, {prismaClient: Prisma
       user: {
         type: userType,
         resolve: async (parent, _args: unknown, context) => {
-          const profileUser = await context.prismaClient.user.findUnique({
+          return await context.prismaClient.user.findUnique({
             where: { id: parent.userId },
           });
-          return profileUser;
         },
       },
       memberType: {
@@ -46,18 +45,16 @@ export const profileQueries = {
   profiles: {
     type: new GraphQLList(profileType),
     resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient}) => {
-      const profiles = await context.prismaClient.profile.findMany();
-      return profiles;
+      return await context.prismaClient.profile.findMany();
     },
   },
   profile: {
     type: profileType,
     args: { id: { type: UUIDType } },
     resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient}) => {
-      const profile = await context.prismaClient.profile.findUnique({
+      return await context.prismaClient.profile.findUnique({
         where: { id: args.id },
       });
-      return profile;
     },
   },
 };

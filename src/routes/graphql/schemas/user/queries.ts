@@ -30,15 +30,13 @@ export const userType: GraphQLObjectType<UserSchema, {prismaClient: PrismaClient
     profile: {
       type: profileType,
       resolve: async (parent, _args: unknown, context) => {
-        const userProfile = await context.dataLoader.userProfile.load(parent.id);
-        return userProfile;
+        return await context.dataLoader.userProfile.load(parent.id);
       },
     },
     posts: {
       type: new GraphQLList(postType),
       resolve: async (parent, _args: unknown, context) => {
-        const userPosts = await context.dataLoader.userPosts.load(parent.id);
-        return userPosts;
+        return await context.dataLoader.userPosts.load(parent.id);
       },
     },
     userSubscribedTo: {

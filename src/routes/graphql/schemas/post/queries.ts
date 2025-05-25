@@ -25,10 +25,9 @@ export const postType: GraphQLObjectType<PostSchema, {prismaClient: PrismaClient
         _args: unknown,
         context: {prismaClient: PrismaClient},
       ) => {
-        const postAuthor = await context.prismaClient.user.findUnique({
+        return await context.prismaClient.user.findUnique({
           where: { id: parent.authorId },
         });
-        return postAuthor;
       },
     },
   }),
@@ -38,16 +37,14 @@ export const postQueries = {
   posts: {
     type: new GraphQLList(postType),
     resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient}) => {
-      const posts = await context.prismaClient.post.findMany();
-      return posts;
+      return await context.prismaClient.post.findMany();
     },
   },
   post: {
     type: postType,
     args: { id: { type: UUIDType } },
     resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient}) => {
-      const post = await context.prismaClient.post.findUnique({ where: { id: args.id } });
-      return post;
+      return await context.prismaClient.post.findUnique({ where: { id: args.id } });
     },
   },
 };
