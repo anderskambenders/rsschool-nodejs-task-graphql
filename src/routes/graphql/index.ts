@@ -3,6 +3,12 @@ import { graphql, parse, validate } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
 import { createGqlResponseSchema, gqlResponseSchema } from './schemas.js';
 import { GraphQLObjectType, GraphQLSchema } from 'graphql/index.js';
+import { initMemberTypesLoader, MemberTypesQueries } from './schemas/memberType/queries.js';
+import { initPostsLoader, PostQueries } from './schemas/post/queries.js';
+import { PrismaClient } from '@prisma/client';
+import { PostMutations } from './schemas/post/mutation.js';
+import { initProfilesLoader, ProfileQueries } from './schemas/profile/queries.js';
+import { ProfileMutations } from './schemas/profile/mutation.js';
 
 export function loaders(db: PrismaClient) {
   return {

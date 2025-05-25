@@ -1,60 +1,94 @@
-import { GraphQLList } from 'graphql';
-import { UUIDType } from '../../types/uuid.js';
-import { GraphQLObjectType, GraphQLBoolean, GraphQLInt } from 'graphql';
-import { memberTypeId, memberType } from '../memberType/queries.js';
-import { userType } from '../user/queries.js';
 import { PrismaClient } from '@prisma/client';
-import AppDataLoader from '../../dataLoader.js';
+import DataLoader from 'dataloader';
+import {
+  GraphQLBoolean,
+  GraphQLInputObjectType,
+  GraphQLInt,
+  GraphQLList,
+  GraphQLNonNull,
+  GraphQLObjectType,
+} from 'graphql';
+import { Static } from '@sinclair/typebox';
+import { profileSchema } from '../../../profiles/schemas.js';
+import { UUIDType } from '../../types/uuid.js';
+import { MemberTypeIdEnum, MemberTypeType } from '../memberType/queries.js';
+import { Context, idField } from '../../types/common.js';
 
-export type ProfileSchema = {
-  id: string;
-  isMale: boolean;
-  yearOfBirth: number;
-  userId: string;
-  memberTypeId: string;
+export type Profile = Static<typeof profileSchema>;
+
+const profileFields = {
+  isMale: { type: new GraphQLNonNull(GraphQLBoolean) },
+  yearOfBirth: { type: new GraphQLNonNull(GraphQLInt) },
+  userId: { type: new GraphQLNonNull(UUIDType) },
+  memberTypeId: { type: new GraphQLNonNull(MemberTypeIdEnum) },
 };
 
-export const profileType: GraphQLObjectType<ProfileSchema, {prismaClient: PrismaClient, dataLoader: AppDataLoader}> =
-  new GraphQLObjectType({
-    name: 'Profile',
-    fields: () => ({
-      id: { type: UUIDType },
-      isMale: { type: GraphQLBoolean },
-      yearOfBirth: { type: GraphQLInt },
-      userId: { type: UUIDType },
-      memberTypeId: { type: memberTypeId },
+const profileFieldsPartial = {
+  isMale: { type: GraphQLBoolean },
+  yearOfBirth: { type: GraphQLInt },
+  memberTypeId: { type: MemberTypeIdEnum },
+};
 
-      user: {
-        type: userType,
-        resolve: async (parent, _args: unknown, context) => {
-          return await context.prismaClient.user.findUnique({
-            where: { id: parent.userId },
-          });
-        },
+export const ProfileType: GraphQLObjectType = new GraphQLObjectType({
+  name: 'ProfileType',
+  fields: () => ({
+    ...idField,
+    ...profileFields,
+    memberType: {
+      type: MemberTypeType,
+      resolve: async ({ memberTypeId }: Profile, _: unknown, { loaders }: Context) => {
+        return loaders.memberTypesLoader.load(memberTypeId);
       },
-      memberType: {
-        type: memberType,
-        resolve: async (parent, _args: unknown, context) => {
-          return context.dataLoader.member.load(parent.memberTypeId)
-        },
-      },
-    }),
+    },
+  }),
+});
+
+export const CreateProfileInput = new GraphQLInputObjectType({
+  name: 'CreateProfileInput',
+  fields: {
+    ...profileFields,
+  },
+});
+
+export const ChangeProfileInput = new GraphQLInputObjectType({
+  name: 'ChangeProfileInput',
+  fields: {
+    ...profileFieldsPartial,
+  },
+});
+
+
+export function initProfilesLoader(db: PrismaClient) {
+  return new DataLoader(async (ids: readonly string[]) => {
+    const map: Record<string, Profile> = {};
+    const profiles = await db.profile.findMany({
+      where: { userId: { in: [...ids] } },
+    });
+
+    profiles.forEach((it) => {
+      const key = it.userId;
+      map[key] = it;
+    });
+
+    return ids.map((id) => map[id] || null);
   });
+}
 
-export const profileQueries = {
-  profiles: {
-    type: new GraphQLList(profileType),
-    resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient}) => {
-      return await context.prismaClient.profile.findMany();
+
+export const ProfileQueries = {
+  profile: {
+    type: ProfileType,
+    args: {
+      ...idField,
+    },
+    resolve: async (_: unknown, { id }: { id: string }, { db }: Context) => {
+      return await db.profile.findUnique({ where: { id } });
     },
   },
-  profile: {
-    type: profileType,
-    args: { id: { type: UUIDType } },
-    resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient}) => {
-      return await context.prismaClient.profile.findUnique({
-        where: { id: args.id },
-      });
+  profiles: {
+    type: new GraphQLNonNull(new GraphQLList(ProfileType)),
+    resolve: async (_: unknown, __: unknown, { db }: Context) => {
+      return await db.profile.findMany();
     },
   },
 };
