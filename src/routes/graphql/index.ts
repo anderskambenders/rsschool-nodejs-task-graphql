@@ -1,42 +1,24 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
-import { createGqlResponseSchema, gqlResponseSchema } from './schemas.js';
-import { graphql, parse, validate, GraphQLObjectType, GraphQLSchema } from 'graphql';
+import { graphql, parse, validate } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
-import { userQueries }  from './schemas/user/queries.js';
-import { profileQueries }  from './schemas/profile/queries.js';
-import { postQueries }  from './schemas/post/queries.js';
-import { memberTypeQueries }  from './schemas/memberType/queries.js';
-import { postMutations } from './schemas/post/mutation.js';
-import { profileMutations } from './schemas/profile/mutation.js';
-import { userMutations } from './schemas/user/mutation.js';
-import AppDataLoader from './dataLoader.js';
+import { createGqlResponseSchema, gqlResponseSchema } from './schemas.js';
+import { GraphQLObjectType, GraphQLSchema } from 'graphql/index.js';
 
-const queryFields = () => ({
-  ...userQueries,
-  ...profileQueries,
-  ...postQueries,
-  ...memberTypeQueries,
-})
+export function loaders(db: PrismaClient) {
+  return {
+    subscriptionsToUsersLoader: initSubscriptionsToUsersLoader(db),
+    usersSubscriptionsLoader: initUsersSubscriptionsLoader(db),
+    postsLoader: initPostsLoader(db),
+    profilesLoader: initProfilesLoader(db),
+    memberTypesLoader: initMemberTypesLoader(db),
+  };
+}
 
-const mutationFields = () => ({
-  ...postMutations,
-  ...profileMutations,
-  ...userMutations
-})
-
-const schema = new GraphQLSchema({
-  query: new GraphQLObjectType({
-    name: 'QueryType',
-    fields: queryFields
-  }),
-  mutation: new GraphQLObjectType({
-    name: 'MutationType',
-    fields: mutationFields
-  }),
-});
-
+export type DataLoaders = ReturnType<typeof loaders>;
 
 const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
+  const { prisma } = fastify;
+
   fastify.route({
     url: '/',
     method: 'POST',
@@ -46,17 +28,43 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
         200: gqlResponseSchema,
       },
     },
-    async handler(req) {
-      const validateErrors = validate(schema, parse(req.body.query), [
-        depthLimit(5),
-      ]);
+    handler: async function (request) {
+      const { query, variables } = request.body;
 
-      return validateErrors && validateErrors.length != 0 ? { data: '', errors: validateErrors } : await graphql({
-        schema: schema,
-        source: req.body.query,
-        variableValues: req.body.variables,
-        contextValue: { prismaClient: fastify.prisma, dataLoader: new AppDataLoader(fastify.prisma) },
-      })
+      const schema = new GraphQLSchema({
+        query: new GraphQLObjectType({
+          name: 'Query',
+          fields: {
+            ...MemberTypesQueries,
+            ...UserQueries,
+            ...PostQueries,
+            ...ProfileQueries,
+          },
+        }),
+        mutation: new GraphQLObjectType({
+          name: 'Mutation',
+          fields: {
+            ...UserMutations,
+            ...PostMutations,
+            ...ProfileMutations,
+          },
+        }),
+      });
+
+      const depthErrors = validate(schema, parse(String(query)), [depthLimit(5)]);
+
+      if (depthErrors.length) {
+        return {
+          errors: depthErrors,
+        };
+      }
+
+      return await graphql({
+        schema,
+        source: String(query),
+        variableValues: variables,
+        contextValue: { db: prisma, loaders: loaders(prisma) },
+      });
     },
   });
 };

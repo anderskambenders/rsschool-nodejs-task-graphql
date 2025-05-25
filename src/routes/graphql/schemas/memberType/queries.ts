@@ -67,7 +67,7 @@ export const MemberTypesQueries = {
   },
   memberTypes: {
     type: new GraphQLNonNull(new GraphQLList(MemberTypeType)),
-    resolve: async (parent: unknown, args: unknown, { db }: Context) => {
+z    resolve: async (parent: unknown, args: unknown, { db }: Context) => {
       return await db.memberType.findMany();
     },
   },
