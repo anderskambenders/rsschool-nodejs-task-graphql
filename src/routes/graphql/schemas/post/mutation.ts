@@ -1,74 +1,39 @@
-import { GraphQLBoolean, GraphQLInputObjectType, GraphQLNonNull, GraphQLString } from 'graphql';
+import { GraphQLNonNull } from 'graphql';
+import { Static } from '@sinclair/typebox';
+import { ChangePostInput, CreatePostInput, PostType } from './queries.js';
+import { Context, idField } from '../../types/common.js';
+import { createPostSchema } from '../../../posts/schemas.js';
 import { UUIDType } from '../../types/uuid.js';
-import { postType } from './queries.js';
-import { PrismaClient } from '@prisma/client';
 
-export const postMutations = {
+export const PostMutations = {
   createPost: {
-    type: postType,
-    args: { dto: { type: new GraphQLInputObjectType({
-      name: 'CreatePostInput',
-      fields: () => ({
-        title: { type: new GraphQLNonNull(GraphQLString) },
-        content: { type: new GraphQLNonNull(GraphQLString) },
-        authorId: { type: new GraphQLNonNull(UUIDType) },
-      }),
-    }) } },
+    type: new GraphQLNonNull(PostType),
+    args: { dto: { type: CreatePostInput } },
     resolve: async (
-      _parent: unknown,
-      args: { dto: {
-        authorId: string;
-        content: string;
-        title: string;
-      } },
-      context: {
-        prismaClient: PrismaClient;
-      },
+      _: unknown,
+      { dto: data }: { dto: Static<(typeof createPostSchema)['body']> },
+      { db }: Context,
     ) => {
-      const post = await context.prismaClient.post.create({ data: args.dto });
-      return post;
-    },
-  },
-  deletePost: {
-    type: GraphQLBoolean,
-    args: { id: { type: UUIDType } },
-    resolve: async (_parent: unknown, args: { id: string }, context: {
-      prismaClient: PrismaClient;
-    }) => {
-      try {
-        await context.prismaClient.post.delete({ where: { id: args.id } });
-        return true;
-      } catch (err) {
-        return false;
-      }
+      return await db.post.create({ data });
     },
   },
   changePost: {
-    type: postType,
-    args: { id: { type: UUIDType }, dto: { type: new GraphQLInputObjectType({
-      name: 'ChangePostInput',
-      fields: () => ({
-        title: { type: GraphQLString },
-        content: { type: GraphQLString },
-        authorId: { type: UUIDType },
-      }),
-    }) } },
+    type: new GraphQLNonNull(PostType),
+    args: { ...idField, dto: { type: ChangePostInput } },
     resolve: async (
-      _parent: unknown,
-      args: { id: string; dto: {
-        authorId: string;
-        content: string;
-        title: string;
-      } },
-      context: {
-        prismaClient: PrismaClient;
-      },
+      _: unknown,
+      { id, dto: data }: { id: string; dto: Static<(typeof createPostSchema)['body']> },
+      { db }: Context,
     ) => {
-      const post = await context.prismaClient.post.update({
-        where: { id: args.id },
-        data: args.dto,
-      });
-      return post;
+      return await db.post.update({ where: { id }, data });
+    },
+  },
+  deletePost: {
+    type: UUIDType,
+    args: { ...idField },
+    resolve: async (_: unknown, { id }: { id: string }, { db }: Context) => {
+      await db.post.delete({ where: { id } });
+      return id;
     },
   },
 };

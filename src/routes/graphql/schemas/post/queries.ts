@@ -1,50 +1,83 @@
-import { GraphQLList } from 'graphql';
-import { GraphQLObjectType, GraphQLString } from 'graphql';
-import { UUIDType } from '../../types/uuid.js';
-import { userType } from '../user/queries.js';
+import { GraphQLInputObjectType, GraphQLList, GraphQLNonNull, GraphQLObjectType, GraphQLString, } from 'graphql';
+import { Static } from '@sinclair/typebox';
 import { PrismaClient } from '@prisma/client';
+import DataLoader from 'dataloader';
+import { postSchema } from '../../../posts/schemas.js';
+import { UUIDType } from '../../types/uuid.js';
+import { Context, idField } from '../../types/common.js';
 
-export type PostSchema = {
-  id: string;
-  title: string;
-  content: string;
-  authorId: string;
+export function initPostsLoader(db: PrismaClient) {
+  return new DataLoader(async (ids: readonly string[]) => {
+    const map: Record<string, Post[]> = {};
+    const rows = await db.post.findMany({
+      where: { authorId: { in: [...ids] } },
+    });
+
+    rows.forEach((it) => {
+      const key = it.authorId;
+
+      if (map[key]) {
+        map[key].push(it);
+      } else {
+        map[key] = [it];
+      }
+    });
+
+    return ids.map((id) => map[id] || []);
+  });
+}
+
+export type Post = Static<typeof postSchema>;
+
+const postFields = {
+  title: { type: new GraphQLNonNull(GraphQLString) },
+  content: { type: new GraphQLNonNull(GraphQLString) },
+  authorId: { type: new GraphQLNonNull(UUIDType) },
 };
 
-export const postType: GraphQLObjectType<PostSchema, {prismaClient: PrismaClient}> = new GraphQLObjectType({
-  name: 'Post',
+const postFieldsPartial = {
+  title: { type: GraphQLString },
+  content: { type: GraphQLString },
+  authorId: { type: UUIDType },
+};
+
+export const PostType = new GraphQLObjectType({
+  name: 'PostType',
   fields: () => ({
-    id: { type: UUIDType },
-    title: { type: GraphQLString },
-    content: { type: GraphQLString },
-    authorId: { type: UUIDType },
-    author: {
-      type: userType,
-      resolve: async (
-        parent: { authorId: string },
-        _args: unknown,
-        context: {prismaClient: PrismaClient},
-      ) => {
-        return await context.prismaClient.user.findUnique({
-          where: { id: parent.authorId },
-        });
-      },
-    },
+    ...idField,
+    ...postFields,
   }),
 });
 
-export const postQueries = {
-  posts: {
-    type: new GraphQLList(postType),
-    resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient}) => {
-      return await context.prismaClient.post.findMany();
+export const CreatePostInput = new GraphQLInputObjectType({
+  name: 'CreatePostInput',
+  fields: {
+    ...postFields,
+  },
+});
+
+export const ChangePostInput = new GraphQLInputObjectType({
+  name: 'ChangePostInput',
+  fields: {
+    ...postFieldsPartial,
+  },
+});
+
+export const PostQueries = {
+  post: {
+    type: PostType,
+    args: {
+      ...idField,
+    },
+    resolve: async (_: unknown, { id }: { id: string }, { db }: Context) => {
+      return await db.post.findUnique({ where: { id } });
     },
   },
-  post: {
-    type: postType,
-    args: { id: { type: UUIDType } },
-    resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient}) => {
-      return await context.prismaClient.post.findUnique({ where: { id: args.id } });
+  posts: {
+    type: new GraphQLNonNull(new GraphQLList(PostType)),
+    resolve: async (_: unknown, __: unknown, { db }: Context) => {
+      return await db.post.findMany();
     },
   },
 };
+

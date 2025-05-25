@@ -10,6 +10,7 @@ import {
 } from 'graphql';
 import { Static } from '@fastify/type-provider-typebox';
 import { MemberTypeId, memberTypeSchema } from '../../../member-types/schemas.js';
+import { Context } from '../../types/common.js';
 
 export type Member = Static<typeof memberTypeSchema>;
 export const MemberTypeIdEnum = new GraphQLEnumType({
@@ -67,7 +68,7 @@ export const MemberTypesQueries = {
   },
   memberTypes: {
     type: new GraphQLNonNull(new GraphQLList(MemberTypeType)),
-z    resolve: async (parent: unknown, args: unknown, { db }: Context) => {
+    resolve: async (parent: unknown, args: unknown, { db }: Context) => {
       return await db.memberType.findMany();
     },
   },
