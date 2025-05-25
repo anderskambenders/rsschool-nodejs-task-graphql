@@ -9,6 +9,7 @@ import { memberTypeQueries }  from './schemas/memberType/queries.js';
 import { postMutations } from './schemas/post/mutation.js';
 import { profileMutations } from './schemas/profile/mutation.js';
 import { userMutations } from './schemas/user/mutation.js';
+import AppDataLoader from './dataLoader.js';
 
 const queryFields = () => ({
   ...userQueries,
@@ -34,9 +35,8 @@ const schema = new GraphQLSchema({
   }),
 });
 
-const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
-  const { prisma } = fastify;
 
+const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
   fastify.route({
     url: '/',
     method: 'POST',
@@ -55,8 +55,8 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
         schema: schema,
         source: req.body.query,
         variableValues: req.body.variables,
-        contextValue: { prismaClient: fastify.prisma },
-      });
+        contextValue: { prismaClient: fastify.prisma, dataLoader: new AppDataLoader(fastify.prisma) },
+      })
     },
   });
 };

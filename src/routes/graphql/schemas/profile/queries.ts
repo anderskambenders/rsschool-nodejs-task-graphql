@@ -4,11 +4,17 @@ import { GraphQLObjectType, GraphQLBoolean, GraphQLInt } from 'graphql';
 import { memberTypeId, memberType } from '../memberType/queries.js';
 import { userType } from '../user/queries.js';
 import { PrismaClient } from '@prisma/client';
+import AppDataLoader from '../../dataLoader.js';
 
-export const profileType: GraphQLObjectType<{
+export type ProfileSchema = {
+  id: string;
+  isMale: boolean;
+  yearOfBirth: number;
   userId: string;
   memberTypeId: string;
-}, {prismaClient: PrismaClient}> =
+};
+
+export const profileType: GraphQLObjectType<ProfileSchema, {prismaClient: PrismaClient, dataLoader: AppDataLoader}> =
   new GraphQLObjectType({
     name: 'Profile',
     fields: () => ({
@@ -30,10 +36,7 @@ export const profileType: GraphQLObjectType<{
       memberType: {
         type: memberType,
         resolve: async (parent, _args: unknown, context) => {
-          const userMemberType = await context.prismaClient.memberType.findUnique({
-            where: { id: parent.memberTypeId },
-          });
-          return userMemberType;
+          return context.dataLoader.member.load(parent.memberTypeId)
         },
       },
     }),
