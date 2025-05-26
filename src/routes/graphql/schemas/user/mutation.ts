@@ -1,110 +1,75 @@
-import { GraphQLInputObjectType, GraphQLNonNull, GraphQLString, GraphQLFloat, GraphQLBoolean } from 'graphql';
-import { userType } from './queries.js';
-import { PrismaClient } from '@prisma/client';
+import { GraphQLNonNull } from 'graphql';
+import { Static } from '@sinclair/typebox';
+import { ChangeUserInput, CreateUserInput, UserType } from './queries.js';
+import { createUserSchema } from '../../../users/schemas.js';
+import { Context, idField } from '../../types/common.js';
 import { UUIDType } from '../../types/uuid.js';
 
-export const userMutations = {
+export const UserMutations = {
   createUser: {
-    type: userType,
-    args: { dto: { type: new GraphQLInputObjectType({
-      name: 'CreateUserInput',
-      fields: () => ({
-        name: { type: new GraphQLNonNull(GraphQLString) },
-        balance: { type: new GraphQLNonNull(GraphQLFloat) },
-      }),
-    })}},
+    type: new GraphQLNonNull(UserType),
+    args: { dto: { type: CreateUserInput } },
     resolve: async (
-      _parent: unknown,
-      args: { dto: {
-        name: string;
-        balance: number;
-      } },
-      context: {
-        prismaClient: PrismaClient;
-      },
+      _: unknown,
+      { dto: data }: { dto: Static<(typeof createUserSchema)['body']> },
+      { db }: Context,
     ) => {
-      return await context.prismaClient.user.create({ data: args.dto });
-    },
-  },
-  deleteUser: {
-    type: GraphQLBoolean,
-    args: { id: { type: UUIDType } },
-    resolve: async (_parent: unknown, args: { id: string }, context: {
-      prismaClient: PrismaClient;
-    }) => {
-      try {
-        await context.prismaClient.user.delete({ where: { id: args.id } });
-        return true;
-      } catch (error) {
-        return false;
-      }
+      return await db.user.create({ data });
     },
   },
   changeUser: {
-    type: userType,
-    args: { id: { type: UUIDType }, dto: { type: new GraphQLInputObjectType({
-      name: 'ChangeUserInput',
-      fields: () => ({
-        name: { type: GraphQLString },
-        balance: { type: GraphQLFloat },
-      }),
-    }) } },
+    type: new GraphQLNonNull(UserType),
+    args: { ...idField, dto: { type: ChangeUserInput } },
     resolve: async (
-      _parent: unknown,
-      args: { id: string; dto: {
-        name: string;
-        balance: number;
-      } },
-      context: {
-        prismaClient: PrismaClient;
-      },
+      _: unknown,
+      { id, dto: data }: { id: string; dto: Static<(typeof createUserSchema)['body']> },
+      { db }: Context,
     ) => {
-      return await context.prismaClient.user.update({
-        where: { id: args.id },
-        data: args.dto,
-      });
+      return await db.user.update({ where: { id }, data });
+    },
+  },
+  deleteUser: {
+    type: UUIDType,
+    args: { ...idField },
+    resolve: async (_: unknown, { id }: { id: string }, { db }: Context) => {
+      await db.user.delete({ where: { id: id } });
+      return id;
     },
   },
   subscribeTo: {
-    type: userType,
+    type: UUIDType,
     args: { userId: { type: UUIDType }, authorId: { type: UUIDType } },
     resolve: async (
-      _parent: unknown,
-      args: { userId: string; authorId: string },
-      context: {
-        prismaClient: PrismaClient;
-      },
+      _: unknown,
+      { userId, authorId }: { userId: string; authorId: string },
+      { db }: Context,
     ) => {
-      await context.prismaClient.subscribersOnAuthors.create({
+       await db.subscribersOnAuthors.create({
         data: {
-          subscriberId: args.userId,
-          authorId: args.authorId,
+          subscriberId: userId,
+          authorId: authorId,
         },
       });
-      return context.prismaClient.user.findUnique({ where: { id: args.userId } });
     },
   },
   unsubscribeFrom: {
-    type: GraphQLBoolean,
+    type: UUIDType,
     args: { userId: { type: UUIDType }, authorId: { type: UUIDType } },
     resolve: async (
-      _parent: unknown,
-      args: { userId: string; authorId: string },
-      context: {
-        prismaClient: PrismaClient;
-      },
+      _: unknown,
+      { userId, authorId }: { userId: string; authorId: string },
+      { db }: Context,
     ) => {
-      try {
-        await context.prismaClient.subscribersOnAuthors.deleteMany({
-          where: {
-            subscriberId: args.userId,
-            authorId: args.authorId,
+      await db.subscribersOnAuthors.delete({
+        where: {
+          subscriberId_authorId: {
+            subscriberId: userId,
+            authorId,
           },
-        });
-        return true;
-      } catch {
-        return false;
-      }
+        },
+      });
+
+      return authorId;
     },
   },
 };

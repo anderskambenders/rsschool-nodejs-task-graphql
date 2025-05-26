@@ -1,96 +1,231 @@
-import { GraphQLObjectType, GraphQLString, GraphQLFloat, GraphQLList, GraphQLResolveInfo, Kind } from 'graphql';
-import { UUIDType } from '../../types/uuid.js';
-import { ProfileSchema, profileType } from '../profile/queries.js';
-import { PostSchema, postType } from '../post/queries.js';
+import {
+  parseResolveInfo,
+  ResolveTree,
+  simplifyParsedResolveInfoFragmentWithType,
+} from 'graphql-parse-resolve-info';
 import { PrismaClient } from '@prisma/client';
-import AppDataLoader from '../../dataLoader.js';
+import DataLoader from 'dataloader';
+import {
+  GraphQLFloat,
+  GraphQLInputObjectType,
+  GraphQLList,
+  GraphQLNonNull,
+  GraphQLObjectType,
+  GraphQLResolveInfo,
+  GraphQLString,
+} from 'graphql';
+import { Static } from '@sinclair/typebox';
+import { userSchema } from '../../../users/schemas.js';
+import { Context, idField } from '../../types/common.js';
+import { PostType } from '../post/queries.js';
+import { ProfileType } from '../profile/queries.js';
 
-export type UserSchema = {
-  id: string;
-  name: string;
-  balance: number;
-  profile?: ProfileSchema;
-  posts?: PostSchema[];
-  userSubscribedTo?: Array<{
-    subscriberId: string;
-    authorId: string;
-  }>;
-  subscribedToUser?: Array<{
-    subscriberId: string;
-    authorId: string;
-  }>;
+export type User = Static<typeof userSchema>;
+
+type Subscription = {
+  subscriberId: string;
+  authorId: string;
 };
 
-export const userType: GraphQLObjectType<UserSchema, {prismaClient: PrismaClient, dataLoader: AppDataLoader}> = new GraphQLObjectType({
-  name: 'User',
+export type UserSubscription = User & {
+  userSubscribedTo: Subscription[];
+};
+
+export type SubscriptionToUser = User & {
+  subscribedToUser: Subscription[];
+};
+
+const userFields = {
+  name: { type: new GraphQLNonNull(GraphQLString) },
+  balance: { type: new GraphQLNonNull(GraphQLFloat) },
+};
+
+const userFieldsPartial = {
+  name: { type: GraphQLString },
+  balance: { type: GraphQLFloat },
+};
+
+export const UserType: GraphQLObjectType = new GraphQLObjectType<User, Context>({
+  name: 'UserType',
   fields: () => ({
-    id: { type: UUIDType },
-    name: { type: GraphQLString },
-    balance: { type: GraphQLFloat },
-    profile: {
-      type: profileType,
-      resolve: async (parent, _args: unknown, context) => {
-        return await context.dataLoader.userProfile.load(parent.id);
-      },
-    },
-    posts: {
-      type: new GraphQLList(postType),
-      resolve: async (parent, _args: unknown, context) => {
-        return await context.dataLoader.userPosts.load(parent.id);
+    ...idField,
+    ...userFields,
+    subscribedToUser: {
+      type: new GraphQLList(UserType),
+      resolve: async ({ id }: User, _: unknown, { loaders }: Context) => {
+        return loaders.subscriptionsToUsersLoader.load(id);
       },
     },
     userSubscribedTo: {
-      type: new GraphQLList(userType),
-      resolve: async (parent, _args: unknown, context) => {
-        const parentValue = parent['userSubscribedTo'];
-        return parentValue
-          ? context.dataLoader.user.loadMany(parentValue.map(s => s.subscriberId))
-          : context.dataLoader.subscribed.load(parent.id);
+      type: new GraphQLList(UserType),
+      resolve: async ({ id }: User, _: unknown, { loaders }: Context) => {
+        return loaders.usersSubscriptionsLoader.load(id);
       },
     },
-    subscribedToUser: {
-      type: new GraphQLList(userType),
-      resolve: async (parent, _args: unknown, context) => {
-        const parentValue = parent['subscribedToUser'];
-        return parentValue
-          ? context.dataLoader.user.loadMany(parentValue.map(s => s.authorId))
-          : context.dataLoader.subscribers.load(parent.id);
+    posts: {
+      type: new GraphQLNonNull(new GraphQLList(PostType)),
+      resolve: async ({ id }: User, _: unknown, { loaders }: Context) => {
+        return loaders.postsLoader.load(id);
+      },
+    },
+    profile: {
+      type: ProfileType,
+      resolve: async ({ id }: User, _: unknown, { loaders }: Context) => {
+        return loaders.profilesLoader.load(id);
       },
     },
   }),
 });
 
-export const userQueries = {
-  users: {
-    type: new GraphQLList(userType),
-    resolve: async (_parent: unknown, _args: unknown, context: {prismaClient: PrismaClient, dataLoader: AppDataLoader}, resolveInfo: GraphQLResolveInfo) => {
-      const include = {};
-      resolveInfo.fieldNodes.forEach((field) => {
-        field.selectionSet?.selections.forEach((selection) => {
-          if (
-            selection.kind == Kind.FIELD &&
-            ['userSubscribedTo', 'subscribedToUser'].includes(selection.name.value)
-          ) {
-            include[selection.name.value] = true;
-          }
-        });
+export const CreateUserInput = new GraphQLInputObjectType({
+  name: 'CreateUserInput',
+  fields: {
+    ...userFields,
+  },
+});
+
+export const ChangeUserInput = new GraphQLInputObjectType({
+  name: 'ChangeUserInput',
+  fields: {
+    ...userFieldsPartial,
+  },
+});
+
+
+export function initSubscriptionsToUsersLoader(db: PrismaClient) {
+  return new DataLoader(async (ids: readonly string[]) => {
+    const map: Record<string, UserSubscription[]> = {};
+    const rows = await db.user.findMany({
+      where: {
+        userSubscribedTo: {
+          some: {
+            authorId: {
+              in: [...ids],
+            },
+          },
+        },
+      },
+      include: {
+        userSubscribedTo: true,
+      },
+    });
+
+    rows.forEach((it1) => {
+      it1.userSubscribedTo.forEach((it2) => {
+        const key = it2.authorId;
+
+        if (map[key]) {
+          map[key].push(it1);
+        } else {
+          map[key] = [it1];
+        }
       });
-      const users = context.prismaClient.user.findMany({ include });
-      users
-        .then((users) => {
-          users.map((u) => {
-            context.dataLoader.user.prime(u.id, u);
-          });
-        })
-        .catch(() => {});
-      return users;
+    });
+
+    return ids.map((id) => map[id] || []);
+  });
+}
+
+export function initUsersSubscriptionsLoader(db: PrismaClient) {
+  return new DataLoader(async (ids: readonly string[]) => {
+    const map: Record<string, SubscriptionToUser[]> = {};
+    const rows = await db.user.findMany({
+      where: {
+        subscribedToUser: {
+          some: {
+            subscriberId: {
+              in: [...ids],
+            },
+          },
+        },
+      },
+      include: {
+        subscribedToUser: true,
+      },
+    });
+
+    rows.forEach((it1) => {
+      it1.subscribedToUser.forEach((it2) => {
+        const key = it2.subscriberId;
+
+        if (map[key]) {
+          map[key].push(it1);
+        } else {
+          map[key] = [it1];
+        }
+      });
+    });
+
+    return ids.map((id) => map[id] || []);
+  });
+}
+
+export const UserQueries = {
+  user: {
+    type: UserType,
+    args: {
+      ...idField,
+    },
+    resolve: async (_: unknown, { id }: { id: string }, { db }: Context) => {
+      return await db.user.findUnique({ where: { id } });
     },
   },
-  user: {
-    type: userType,
-    args: { id: { type: UUIDType } },
-    resolve: async (_parent: unknown, args: { id: string }, context: {prismaClient: PrismaClient, dataLoader: AppDataLoader}) => {
-      return context.dataLoader.user.load(args.id);
+  users: {
+    type: new GraphQLNonNull(new GraphQLList(UserType)),
+    resolve: async (
+      _: unknown,
+      __: unknown,
+      { db, loaders }: Context,
+      info: GraphQLResolveInfo,
+    ) => {
+      const { fields } = simplifyParsedResolveInfoFragmentWithType(
+        parseResolveInfo(info) as ResolveTree,
+        UserType,
+      );
+
+      const subscribedToUser = 'subscribedToUser' in fields;
+      const userSubscribedTo = 'userSubscribedTo' in fields;
+
+      const users = await db.user.findMany({
+        include: {
+          subscribedToUser,
+          userSubscribedTo,
+        },
+      });
+
+      if (subscribedToUser || userSubscribedTo) {
+        const { usersSubscriptionsLoader, subscriptionsToUsersLoader } = loaders;
+
+        const map: Record<string, UserSubscription | SubscriptionToUser> = {};
+        users.forEach((it) => {
+          const key = it.id;
+          map[key] = it;
+        });
+
+        users.forEach((user) => {
+          if (subscribedToUser) {
+            subscriptionsToUsersLoader.prime(
+              user.id,
+              user.subscribedToUser.map((it) => {
+                const key = it.subscriberId;
+                return map[key] as UserSubscription;
+              }),
+            );
+          }
+
+          if (userSubscribedTo) {
+            usersSubscriptionsLoader.prime(
+              user.id,
+              user.userSubscribedTo.map((it) => {
+                const key = it.authorId;
+                return map[key] as SubscriptionToUser;
+              }),
+            );
+          }
+        });
+      }
+
+      return users;
     },
   },
 };
